@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import getDataUri from "../utils/datauri.js";
 import cloudinary from "../utils/cloudinary.js";
+import { Post } from "../models/post.model.js";
 
 export const register = async (req, res) => {
   try {
@@ -62,6 +63,21 @@ export const login = async (req, res) => {
         success: false,
       });
 
+    const token = await jwt.sign({ userId: user._id }, process.env.SECRET_KEY, {
+      expiresIn: "1h",
+    });
+    //populate each post if in the post array
+    const populatedUser = await Promise.all(
+      user.posts.map( async (postid) => {
+        const post = await Post.findById(postid);
+
+        if(post.author.equals(user._id)) {
+          return post;
+        }
+        return null;
+      })
+    );
+
     user = {
       _id: user._id,
       username: user.username,
@@ -72,10 +88,6 @@ export const login = async (req, res) => {
       following: user.following,
       posts: user.posts,
     };
-
-    const token = await jwt.sign({ userId: user._id }, process.env.SECRET_KEY, {
-      expiresIn: "1h",
-    });
 
     return res
       .cookie("token", token, {
@@ -107,7 +119,7 @@ export const logout = async (_, res) => {
 export const getProfile = async (req, res) => {
   try {
     const userId = req.params.id;
-    let user = await User.findById(userId).select('-password');
+    let user = await User.findById(userId).select("-password");
     return res.status(200).json({
       user,
       success: true,
